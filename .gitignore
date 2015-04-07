@@ -1,0 +1,17 @@
+syntax: glob
+Library
+Temp
+Builds
+*.pidb
+*.sln
+.DS_Store
+*.sln
+*.userprefs
+*.csproj
+*.pidb
+*.unitypackage
+*.unityproj
+*.suo
+ 
+syntax: regexp
+/*.orig.*
