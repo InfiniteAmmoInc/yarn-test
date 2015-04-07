@@ -1,0 +1,29 @@
+[
+	{
+		"title": "Start",
+		"tags": "",
+		"body": "Frank: Hey, it's me. Frank.\nSammy: W-who?\nFrank: Frank! Ya know?\nSammy: Umm. N-no, I don't... know?\n[[Why don't you know?|WhyNot]]\n[[Anyways, whatever.|Whatever]]",
+		"position": {
+			"x": 540,
+			"y": 260
+		}
+	},
+	{
+		"title": "WhyNot",
+		"tags": "",
+		"body": "Frank: Why not?\nSammy: Because this is stupid.",
+		"position": {
+			"x": 330,
+			"y": 505
+		}
+	},
+	{
+		"title": "Whatever",
+		"tags": "",
+		"body": "Frank: Whatever.\nSammy: That's the spirit!",
+		"position": {
+			"x": 785,
+			"y": 496
+		}
+	}
+]
