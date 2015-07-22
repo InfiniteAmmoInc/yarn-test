@@ -185,6 +185,42 @@ public class DialogueImplementation : MonoBehaviour
 		return string.Compare(strA, strB, System.StringComparison.InvariantCultureIgnoreCase) == 0;
 	}
 
+	public void SetInteger(string varName, int varValue)
+	{
+		Continuity.instance.SetVar(varName, varValue);
+	}
+
+	public int GetInteger(string varName)
+	{
+		return Continuity.instance.GetVar(varName);
+	}
+
+	public void AddToInteger(string varName, int addAmount)
+	{
+		Continuity.instance.SetVar(varName, Continuity.instance.GetVar(varName) + addAmount);
+	}
+
+	public void SetString(string varName, string varValue)
+	{
+		// TODO: write this!
+	}
+
+	// called when node not found
+	public void NodeFail()
+	{
+
+	}
+
+	public bool IsPaused()
+	{
+		return false;
+	}
+
+	public bool EvaluateIfChunk(string chunk, ref bool result)
+	{
+		return false;
+	}
+
 	string textToRun = "";
 	void OnGUI()
 	{

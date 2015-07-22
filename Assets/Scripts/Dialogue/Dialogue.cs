@@ -7,6 +7,17 @@ using SimpleJSON;
 
 public class Dialogue : MonoBehaviour
 {
+	public class Line
+	{
+		public Line(string text, int index)
+		{
+			this.index = index;
+			this.text = text;
+		}
+		public int index;
+		public string text;
+	}
+
 	public class Node
 	{
 		public Node(string title, string text)
@@ -29,18 +40,28 @@ public class Dialogue : MonoBehaviour
 		public string nodeTitle;
 	}
 
-	TextAsset textAsset;
+	public TextAsset textAsset { get; private set; }
 	public bool running { get; private set; }
 	public int currentOption { get; private set; }
 
+	enum Filetype { Twine, JSON }
+	enum ParseMode { None, Text, Title }
+
 	List<Node> nodes = new List<Node>();
-	Node currentNode;
+	public Node currentNode { get; private set; }
 	// glue for extra commands, output, options, characters
-	DialogueImplementation implementation;
+	public DialogueImplementation implementation { get; private set; }
 	List<string> visitedNodes = new List<string>();
 	string filename = "";
 	string characterName = "", lastCharacterName = "";
 	List<Option> options = new List<Option>();
+	public string runningNode { get; private set; }
+	TextAsset lastTextAssetParsed;
+
+	string lastNodeTitle;
+	int lastLineIndex;
+
+	public string varNodeTitle, varLineIndex;
 
 	void Awake()
 	{
@@ -50,18 +71,38 @@ public class Dialogue : MonoBehaviour
 	void Start()
 	{
 		if (textAsset != null)
-			Parse(textAsset.text);
+			ParseInto(textAsset.text, ref nodes);
+
+		//LoadProgress();
 	}
+
+	/*
+	void LoadProgress()
+	{
+		if (progressKey != "")
+		{
+			string progressData = PlayerPrefs.GetString(progressKey);
+			var tokens = progressData.Split(':');
+			string nodeName = tokens[0];
+			int lineNumber = System.Convert.ToInt32(tokens[1], System.Globalization.CultureInfo.InvariantCulture);
+		}
+	}
+
+	void SaveProgress()
+	{
+		if (progressKey != "")
+		{
+			PlayerPrefs.SetString(progressKey, currentNode.title + ":" + currentLineNumber);
+		}
+	}
+	*/
 
 	public void SetCurrentOption(int currentOption)
 	{
 		this.currentOption = currentOption;
 	}
 
-	enum Filetype { Twine, JSON }
-	private enum ParseMode { None, Text, Title }
-
-	void Parse(string text)
+	void ParseInto(string text, ref List<Node> nodes)
 	{
 		Filetype filetype = Filetype.JSON;
 
@@ -77,7 +118,10 @@ public class Dialogue : MonoBehaviour
 			int c = 0;
 			while (N[c] != null)
 			{
-				nodes.Add(new Node(((string)N[c]["title"]).Trim(), ((string)(N[c]["body"])).Replace('\r', '\n')));	
+				if (N[c]["title"] != null && N[c]["body"] != null)
+				{
+					nodes.Add(new Node(((string)N[c]["title"]).Trim(), ((string)(N[c]["body"])).Replace('\r', '\n')));	
+				}
 				c++;
 			}
 			break;
@@ -100,17 +144,6 @@ public class Dialogue : MonoBehaviour
 
 				if (parseMode != ParseMode.None)
 				{
-					/*
-					if (line[0] == 'F')
-					{
-						nodeX = float.Parse(line.Substring(1, line.Length-1), System.Globalization.CultureInfo.InvariantCulture);
-					}
-					else if (line.Substring(0, 2) == "aF")
-					{
-
-					}
-					else
-					*/
 					if (line[0] == 'V')
 					{
 						if (parseMode == ParseMode.Text)
@@ -136,52 +169,146 @@ public class Dialogue : MonoBehaviour
 			}
 			break;
 		}
-
-		/*
-		foreach (var node in nodes)
-		{
-			Debug.Log("------------------------------------");
-			Debug.Log("Title: " + node.title);
-			Debug.Log("Text: " + node.text);
-		}
-		*/
 	}
 
 	Node GetNode(string title)
 	{
 		foreach (Node node in nodes)
 		{
-			if (node.title == title)
+			if (IsString(node.title, title))
 				return node;
 		}
-		Debug.LogWarning("Could not find node of title: [" + title + "]");
+		//Debug.LogWarning("Could not find node of title: [" + title + "]");
 		return null;
 	}
 
-	public void Run(TextAsset textAsset, string startNode = "Start")
+	public bool HasNode(TextAsset textAsset, string nodeName)
 	{
-		filename = textAsset.name;
-		Run(textAsset.text);
+		string nodeNamePointOne = nodeName + ".1";
+		//List<Node> nodes = new List<Node>();
+
+
+		if (textAsset != lastTextAssetParsed)
+		{
+			Parse(textAsset);
+		}
+
+		foreach (var node in nodes)
+		{
+			if (IsString(node.title, nodeName) || IsString(node.title, nodeNamePointOne))
+				return true;
+		}
+		return false;
 	}
 
-	public void Run(string text, string startNode = "Start")
+	public void Parse(TextAsset textAsset)
 	{
+		lastTextAssetParsed = textAsset;
+		ParseInto(textAsset.text, ref nodes);
+	}
+
+	public string GetNodeText(string nodeTitle)
+	{
+		foreach (var node in nodes)
+		{
+			if (node.title == nodeTitle)
+			{
+				return node.text;
+			}
+		}
+		return "";
+	}
+
+
+	// parse the textAsset (if not already parsed) and run 
+	public void Run(TextAsset textAsset, string startNode = "Start", int startLineIndex = 0)
+	{
+		this.textAsset = textAsset;
+		filename = textAsset.name;
+		if (textAsset != lastTextAssetParsed)
+		{
+			Debug.LogWarning("Re-parsing...");
+			Parse(textAsset);
+		}
+
+		RunInternal(startNode, startLineIndex);
+	}
+
+	// parse the text passed in and run
+	public void Run(string text, string startNode = "Start", int startLineIndex = 0)
+	{
+		this.textAsset = null;
+		filename = "";
+		ParseInto(text, ref nodes);
+		
+		RunInternal(startNode, startLineIndex);
+	}
+
+	void RunInternal(string startNode, int startLineIndex)
+	{
+		Stop();
+
+		Debug.LogWarning("startNode: " + startNode + " at " + startLineIndex);
+
+		this.runningNode = startNode;
 		
 		if (startNode == "")
 			startNode = "Start";
 
 		currentNode = null;
 
-		Parse(text);
 		if (startNode == "Start")
-		{
 			currentNode = GetNode("Start:" + Application.loadedLevelName);
-		}
+
 		if (currentNode == null)
 			currentNode = GetNode(startNode);
 
+		if (currentNode == null)
+		{
+			Debug.LogWarning("Could not find node named: " + startNode);
+			currentNode = GetNode(startNode + ".1");
+			if (currentNode != null)
+			{
+				// if we can't find a node with the regular name but we can find a node with the .1 after it, then 
+				// we're playing a repeated auto node thingy
+				// so check continuity
+				int nodeProgress = implementation.GetInteger(filename + "_" + startNode);
+				if (nodeProgress != -1)
+				{
+					// try to get the next node in the sequence
+					currentNode = GetNode(startNode + "." + (nodeProgress+1));
+					if (currentNode == null)
+					{
+						// if we couldn't get the next node, repeat the last node
+						if (nodeProgress != 0)
+							currentNode = GetNode(startNode + "." + nodeProgress);
+					}
+					else
+					{
+						// commit to moving to the next node, since we found it
+						nodeProgress++;
+						implementation.SetInteger(filename + "_" + startNode, nodeProgress);
+					}
+				}
+			}
+		}
+		else
+		{
+			int nodeProgress = implementation.GetInteger(filename + "_" + startNode);
+			if (nodeProgress == -1)
+			{
+				currentNode = null;
+			}
+		}
+
 		if (currentNode != null)
-			StartCoroutine(DoRunText(currentNode));
+		{
+			StartCoroutine(DoRunText(currentNode, startLineIndex));
+		}
+		else
+		{
+			implementation.NodeFail();
+		}
 	}
 
 	public string ParseFunction(string name)
@@ -202,10 +329,14 @@ public class Dialogue : MonoBehaviour
 			//Debug.LogWarning("after SUBSTRING: " + line);
 		}
 
-		line = line.Replace("if", "");
-		line = line.Replace("elseif", "");
-		line = line.Replace("else", "");
-
+		line = line.Trim();
+		if (line.Substring(0, 2) == "if")
+			line = line.Substring(2, line.Length - 2);
+		else if (line.Substring(0, 6) == "elseif")
+			line = line.Substring(6, line.Length - 6);
+		else if (line.Substring(0, 4) == "else")
+			line = line.Substring(4, line.Length - 4);
+		
 		// split the line into chunks and operators
 		List<string> chunks = new List<string>();
 		List<string> operators = new List<string>();
@@ -243,7 +374,7 @@ public class Dialogue : MonoBehaviour
 					eval = (eval && EvaluateIfChunk(chunks[i+1]));
             }
         }
-        Debug.LogWarning("result of EvaluateIf: " + eval);
+        //Debug.LogWarning("result of EvaluateIf: " + eval);
 		return eval;
 	}
 
@@ -267,12 +398,15 @@ public class Dialogue : MonoBehaviour
 
 	bool EvaluateIfChunk(string chunk)
 	{
-		Debug.LogWarning("EvaluateIfChunk: " + chunk);
+		//Debug.LogWarning("EvaluateIfChunk: " + chunk);
 
 		bool result = false;
-		if (chunk.IndexOf("visited(") != -1)
-		{
 
+		if (implementation.EvaluateIfChunk(chunk, ref result))
+		{
+		}
+		else if (chunk.IndexOf("visited(") != -1)
+		{
 			bool not = false;
 			not = (chunk.IndexOf("not") != -1);
 			string nodeName = GetVisitedNodeName(chunk);
@@ -293,13 +427,13 @@ public class Dialogue : MonoBehaviour
 		}
 		else
 		{
-
+			Debug.LogWarning("chunk: " + chunk);
 			string[] bits = chunk.Trim().Split(' ');
 			string var = ParseVariableName(bits[0]);
 			string op = bits[1];
-			/*
 			if (bits[2].IndexOf("\"") != -1)
 			{
+				/*
 				string val = bits[2].Substring(1, bits[2].Length-2);
 				bool eval = false;
 				if (op == "=" || op == "==" || op == "eq" || op == "is")
@@ -310,9 +444,9 @@ public class Dialogue : MonoBehaviour
 					Debug.LogError("Comparison operator not defined: " + op);
 				
 				result = eval;
+				*/
 			}
-			*/
-			if (true)
+			else
 			{
 				int val = int.Parse(bits[2], System.Globalization.CultureInfo.InvariantCulture);
 
@@ -320,29 +454,31 @@ public class Dialogue : MonoBehaviour
 				
 				bool eval = false;
 				if (op == "=" || op == "==" || op == "eq" || op == "is")
-					eval = (Continuity.instance.GetVar(var) == val);
+					eval = (implementation.GetInteger(var) == val);
 				else if (op == ">" || op == "gt")
-					eval = (Continuity.instance.GetVar(var) > val);
+					eval = (implementation.GetInteger(var) > val);
 				else if (op == ">=" || op == "gte")
-					eval = (Continuity.instance.GetVar(var) >= val);
+					eval = (implementation.GetInteger(var) >= val);
 				else if (op == "<" || op == "lt")
-					eval = (Continuity.instance.GetVar(var) < val);
+					eval = (implementation.GetInteger(var) < val);
 				else if (op == "<=" || op == "lte")
-					eval = (Continuity.instance.GetVar(var) <= val);
+					eval = (implementation.GetInteger(var) <= val);
 				else if (op == "!=" || op == "neq")
-					eval = (Continuity.instance.GetVar(var) != val);
+					eval = (implementation.GetInteger(var) != val);
 				else
 					Debug.LogError("Comparison operator not defined: " + op);
 				result = eval;
 			}
 		}
-		Debug.LogWarning("result of EvaluateIfChunk("+chunk+"): " + result);
+		//Debug.LogWarning("result of EvaluateIfChunk("+chunk+"): " + result);
 		return result;
 	}
 
 	public void Stop()
 	{
+		nestedRunTexts = 0;
 		StopAllCoroutines();
+		running = false;
 	}
 
 	enum ParseIfState
@@ -353,20 +489,20 @@ public class Dialogue : MonoBehaviour
 	}
 
 	// returns an IF block -> *NOT* including the top line!!! so it'll be shorter than you expect! D:
-	List<string> GetIfBlock(List<string> lines)
+	List<Line> GetIfBlock(List<Line> lines)
 	{
-		List<string> returnLines = new List<string>();
+		List<Line> returnLines = new List<Line>();
 
 		// assume first line is <<if or <<elseif
 		int ifs = 1;
 		for (int i = 1; i < lines.Count; i++)
 		{
-			string line = lines[i];
+			var line = lines[i];
 			
 			returnLines.Add(line);
 			//Debug.Log("added return line: " + line + " num lines: " + returnLines.Count);
 
-			if (line.IndexOf("<<if") != -1)
+			if (line.text.IndexOf("<<if") != -1)
 			{
 				if (i != 0 && ifs == 0)
 				{
@@ -375,7 +511,7 @@ public class Dialogue : MonoBehaviour
 				}
 				ifs++;
 			}
-			else if (line.IndexOf("<<elseif") != -1)
+			else if (line.text.IndexOf("<<elseif") != -1)
 			{
 				if (ifs == 1)
 				{
@@ -384,7 +520,7 @@ public class Dialogue : MonoBehaviour
 					break;
 				}
 			}
-			else if (line.IndexOf("<<else") != -1)
+			else if (line.text.IndexOf("<<else") != -1)
 			{
 				if (ifs == 1)
 				{
@@ -393,7 +529,7 @@ public class Dialogue : MonoBehaviour
 					break;
 				}
 			}
-			else if (line.IndexOf("<<endif>>") != -1)
+			else if (line.text.IndexOf("<<endif>>") != -1)
 			{
 				ifs--;
 				if (ifs == 0)
@@ -413,26 +549,27 @@ public class Dialogue : MonoBehaviour
 		return returnLines;
 	}
 
-	IEnumerator ParseIf(List<string> lines)
+	IEnumerator ParseIf(List<Line> lines, int startLineIndex = 0)
 	{
-		Debug.LogWarning("Entered ParseIf!");
+		//Debug.LogWarning("Entered ParseIf!");
 		ParseIfState parseIfState = ParseIfState.AddLines;
 		List<string> newLines = new List<string>();
 		int i = 0;
 		while (i < lines.Count)
 		{
-			string line = lines[i];
-			Debug.Log("line["+i+"]: " + line);
+			lastLineIndex = lines[i].index;
+			string line = lines[i].text;
+			//Debug.Log("line["+i+"]: " + line);
 
 			if (line.IndexOf("<<if") != -1)
 			{
 				if (EvaluateIf(line))
 				{
-					List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+					List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 					int skipAmount = block.Count+1;
 					i += skipAmount;
 					//Debug.Log("Passed if: ParseIfState.SkipToEndIf, skipped: " + skipAmount + " line now #" + i + ": " + lines[i]);
-					yield return StartCoroutine(ParseIf(block));
+					yield return StartCoroutine(ParseIf(block, startLineIndex));
 					if (i >= lines.Count)
 							break;
 					parseIfState = ParseIfState.SkipToEndIf;
@@ -440,7 +577,7 @@ public class Dialogue : MonoBehaviour
 				else
 				{
 					parseIfState = ParseIfState.SkipToNextElse;
-					List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+					List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 					int skipAmount = block.Count+1;
 					i += skipAmount;
 					if (i >= lines.Count)
@@ -452,7 +589,7 @@ public class Dialogue : MonoBehaviour
 			{
 				if (parseIfState == ParseIfState.SkipToEndIf)
 				{
-					List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+					List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 					int skipAmount = block.Count+1;
 					i += skipAmount;
 					if (i >= lines.Count)
@@ -463,10 +600,10 @@ public class Dialogue : MonoBehaviour
 				{
 					if (EvaluateIf(line))
 					{
-						List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						int skipAmount = block.Count+1;
 						i += skipAmount;
-						yield return StartCoroutine(ParseIf(block));
+						yield return StartCoroutine(ParseIf(block, startLineIndex));
 						parseIfState = ParseIfState.SkipToEndIf;
 						if (i >= lines.Count)
 							break;
@@ -476,7 +613,7 @@ public class Dialogue : MonoBehaviour
 					{
 						//Debug.Log("Failed elseif... ParseIfState.SkipToNextElse");
 						parseIfState = ParseIfState.SkipToNextElse;
-						List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						int skipAmount = block.Count+1;
 						i += skipAmount;
 						if (i >= lines.Count)
@@ -489,37 +626,35 @@ public class Dialogue : MonoBehaviour
 			{
 				if (parseIfState == ParseIfState.SkipToEndIf)
 				{
-					List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+					List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 					int skipAmount = block.Count+1;
 					i += skipAmount;
 					if (i >= lines.Count)
-							break;
+						break;
 					//Debug.LogWarning("Skipped: " + skipAmount + " due to ParseIfState.SkipToEndIf");
 				}
 				else
 				{
 					if (parseIfState == ParseIfState.SkipToNextElse)
 					{
-						List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						i += block.Count;
-						yield return StartCoroutine(ParseIf(block));
+						yield return StartCoroutine(ParseIf(block, startLineIndex));
 						parseIfState = ParseIfState.SkipToEndIf;
 					}
 					else
 					{
 						parseIfState = ParseIfState.AddLines;
-						List<string> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
+						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						int skipAmount = block.Count+1;
 						i += skipAmount;
 						if (i >= lines.Count)
 							break;
-						//Debug.LogWarning("Skipped: " + skipAmount + " due to failed SOME WEIRDNESS line now #" + i + ": " + lines[i]);
 					}
 				}
 			}
 			else if (line.IndexOf("<<endif>>") != -1)
 			{
-				//Debug.Log("Found endif... ParseIfState.AddLines");
 				parseIfState = ParseIfState.AddLines;
 				i++;
 			}
@@ -527,15 +662,12 @@ public class Dialogue : MonoBehaviour
 			{
 				if (parseIfState == ParseIfState.AddLines)
 				{
-					yield return StartCoroutine(RunLine(line));
+					yield return StartCoroutine(RunLine(lines[i], startLineIndex));
 					newLines.Add(line);
-
 				}
 				i++;
 			}
 		}
-		//Debug.LogWarning ("Returning from ParseIf ----------------");
-		//return newLines;
 	}
 
 	bool ParseOpVal(string text, string op, ref string varName, ref int val)
@@ -546,7 +678,6 @@ public class Dialogue : MonoBehaviour
 			int dollarSignIndex = text.IndexOf('$');
 			string front = text.Substring(dollarSignIndex, opIndex - dollarSignIndex).Trim();
 			varName = ParseVariableName(front);
-			//Debug.LogError("front: " + front + " varName: " + varName);
 			val = int.Parse(text.Substring(opIndex+op.Length, text.Length - (opIndex+op.Length)), System.Globalization.CultureInfo.InvariantCulture);
 			return true;
 		}
@@ -555,7 +686,7 @@ public class Dialogue : MonoBehaviour
 
 	IEnumerator RunCommand(string line)
 	{
-		Debug.Log("RunCommand: " + line);
+		//Debug.Log("RunCommand: " + line);
 		string[] tokens = line.Split(' ');
 		bool ranStandardCommand = false;
 		if (tokens.Length > 0)
@@ -564,19 +695,31 @@ public class Dialogue : MonoBehaviour
 			{
 				int val = 0;
 				string varName = "";
-				if (ParseOpVal(line, "+=", ref varName, ref val))
-					Continuity.instance.ChangeVar(varName, val);
+				if (line.IndexOf("\"") != -1)
+				{
+					int stringStart = line.IndexOf("\"")+1;
+					int stringEnd = line.LastIndexOf("\"");
+					string bit = line.Substring(stringStart, (stringEnd - stringStart));
+					Debug.Log("read set string value: " + bit);
+					implementation.SetString(varName, bit);
+				}
+				else if (ParseOpVal(line, "+=", ref varName, ref val))
+					implementation.AddToInteger(varName, val);
 				else if (ParseOpVal(line, "-=", ref varName, ref val))
-					Continuity.instance.ChangeVar(varName, -val);
+					implementation.AddToInteger(varName, -val);
 				else if (ParseOpVal(line, "*=", ref varName, ref val))
-					Continuity.instance.SetVar(varName, Continuity.instance.GetVar(varName) * val);
+					implementation.SetInteger(varName, implementation.GetInteger(varName) * val);
 				else if (ParseOpVal(line, "/=", ref varName, ref val))
-					Continuity.instance.SetVar(varName, Continuity.instance.GetVar(varName) / val);
+					implementation.SetInteger(varName, implementation.GetInteger(varName) / val);
 				else if (ParseOpVal(line, "=", ref varName, ref val))
-					Continuity.instance.SetVar(varName, val);
-				else if (ParseOpVal(line, "to", ref varName, ref val))
-					Continuity.instance.SetVar(varName, val);
+					implementation.SetInteger(varName, val);
+				else if (ParseOpVal(line, " to ", ref varName, ref val))
+					implementation.SetInteger(varName, val);
 				ranStandardCommand = true;
+			}
+			else if (IsString(tokens[0], "end"))
+			{
+				implementation.SetInteger(filename + "_" + runningNode, -1);
 			}
 		}
 		if (!ranStandardCommand)
@@ -585,17 +728,26 @@ public class Dialogue : MonoBehaviour
 		}
 	}
 
-	IEnumerator RunLine(string line)
+	public IEnumerator RunLine(Line lineObject, int startLineIndex)
 	{
+		//Debug.LogWarning("Running line: " + line);
+		while (implementation.IsPaused())
+		{
+			yield return null;
+		}
+
+		if (varLineIndex != "" && varLineIndex != null)
+			implementation.SetInteger(varLineIndex, lineObject.index);
+
 		string commandLine = "";
 		// run all macros
 		// run them
 		//line = ProcessLine(line, "<<", ">>", ProcessMacro);
-
+		var line = lineObject.text.Trim();
 		// if this line isn't an options line
 		if (line.IndexOf("[[") == -1)
 		{
-			Debug.Log("the LINE CHECK: " + line);
+			//Debug.Log("the LINE CHECK: " + line);
 			// check to see if this is a command line
 			int commandStart = line.IndexOf("<<");
 			if (commandStart == -1)
@@ -607,32 +759,49 @@ public class Dialogue : MonoBehaviour
 				{
 					characterName = line.Substring(0, colon);
 					
-					string name = line.Substring(0, colon);
+					//string name = line.Substring(0, colon);
 					line = line.Substring(colon+1, line.Length - (colon + 1));
 				}
 			}
 			else
 			{
-				Debug.LogWarning("is command line!");
+				//Debug.LogWarning("is command line!");
 				int commandEnd = line.IndexOf(">>");
 				commandLine = line.Substring(commandStart+2, commandEnd - (commandStart+2));
 				line = line.Substring(0, commandStart) + line.Substring(commandEnd+2, line.Length - (commandEnd+2));//line.Replace(commandLine, "");
 			}
+
+			//Debug.Log("character name [" + characterName + "]");
 
 			line = line.Trim();
 
 			if (line.Length != 0)
 			{
 				line = implementation.Parse(characterName, line);
-				yield return StartCoroutine(implementation.Say(characterName, line));
+				line = line.Trim();
+				if (line.Length > 0)
+				{
+					if (lineObject.index >= startLineIndex)
+					{
+						//Debug.LogWarning("lineObject.index: " + lineObject.index + " startLineIndex: " + startLineIndex);
+						yield return StartCoroutine(implementation.Say(characterName, line));
+					}
 				
-				if (lastCharacterName != characterName)
-					lastCharacterName = characterName;
+					if (lastCharacterName != characterName)
+						lastCharacterName = characterName;
+				}
+			}
+			
+			if (varLineIndex != "" && varLineIndex != null)
+				implementation.SetInteger(varLineIndex, lineObject.index+1);
+			
+			if (lineObject.index >= startLineIndex)
+			{
+				//Debug.LogWarning("lineObject.index: " + lineObject.index + " startLineIndex: " + startLineIndex);
+				yield return StartCoroutine(RunCommand(commandLine));
 			}
 
-			yield return StartCoroutine(RunCommand(commandLine));
-
-			yield return null;
+			//yield return null;
 		}
 		else
 		{
@@ -657,11 +826,17 @@ public class Dialogue : MonoBehaviour
 		options.Add(option);
 	}
 
-	IEnumerator DoRunText(Node currentNode)
+	int nestedRunTexts = 0;
+	IEnumerator DoRunText(Node currentNode, int startLineIndex = 0)
 	{
+		lastNodeTitle = currentNode.title;
+		if (varNodeTitle != "" && varNodeTitle != null)
+			implementation.SetString(varNodeTitle, currentNode.title);
+
+		nestedRunTexts++;
 		string text = currentNode.text;
 		Visit(currentNode.title);
-		Debug.Log("Running node with text: " + text);
+		Debug.Log("Running node [" + currentNode.title + "] with text [" + text + "]");
 
 		running = true;
 		characterName = "";
@@ -673,8 +848,9 @@ public class Dialogue : MonoBehaviour
 
 		// edit lines array to put commands on separate lines
 		// to make parsing simpler later on
-		List<string> sortedLines = new List<string>();
+		List<Line> sortedLines = new List<Line>();
 		int c = 0;
+		int lineIndex = 0;
 		for (int i = 0; i < lines.Length; i++)
 		{
 			string line = lines[i];
@@ -695,23 +871,32 @@ public class Dialogue : MonoBehaviour
 
 				front = line.Substring(0, commandLineStart).Trim();
 				if (front != "")
-					sortedLines.Add(front);
+				{
+					sortedLines.Add(new Line(front, lineIndex));
+					lineIndex++;
+				}
 				
 				center = line.Substring(commandLineStart, end - commandLineStart).Trim();
 				if (center != "")
-					sortedLines.Add(center);
+				{
+					sortedLines.Add(new Line(center, lineIndex));
+					lineIndex++;
+				}
 
 				line = line.Substring(end, line.Length - end).Trim();
 			}
 			
 			if (line != "")
-				sortedLines.Add(line);
+			{
+				sortedLines.Add(new Line(line, lineIndex));
+				lineIndex++;
+			}
 		}
 
 		// MACROS
 
 		// parse ifs
-		yield return StartCoroutine(ParseIf(sortedLines));
+		yield return StartCoroutine(ParseIf(sortedLines, startLineIndex));
 
 		// skip options select if we only have one option and it has no text
 		if (options.Count == 1 && options[0].text == "")
@@ -719,8 +904,7 @@ public class Dialogue : MonoBehaviour
 			gotoNode = options[0].nodeTitle;
 			options.Clear();
 		}
-
-		if (options.Count > 0)
+		else if (options.Count > 0)
 		{
 CantFindNodeLoopPoint:
 
@@ -729,8 +913,7 @@ CantFindNodeLoopPoint:
 			currentNode = GetNode(options[currentOption].nodeTitle);
 			if (currentNode != null)
 			{
-				yield return null;
-				yield return StartCoroutine(DoRunText(currentNode));
+				StartCoroutine(DoRunText(currentNode));
 			}
 			else
 			{
@@ -741,21 +924,30 @@ CantFindNodeLoopPoint:
 
 		if (gotoNode != "")
 		{
-			currentNode = GetNode(gotoNode);
-			if (currentNode != null)
+			this.currentNode = GetNode(gotoNode);
+			if (this.currentNode != null)
 			{
 				gotoNode = "";
-				yield return null;
-				Debug.LogWarning("Running node: " + currentNode.title);
-				yield return StartCoroutine(DoRunText(currentNode));
+				//Debug.LogWarning("Running node: " + currentNode.title);
+				yield return StartCoroutine(DoRunText(this.currentNode));
 			}
 		}
 
-        yield return StartCoroutine(implementation.EndText());
+		nestedRunTexts--;
 
-		running = false;
+		Debug.LogWarning("nestedRunTexts is now: " + nestedRunTexts);
 
-		yield break;
+		if (nestedRunTexts <= 0)
+		{
+			Debug.LogWarning("Calling EndText...");
+        	yield return StartCoroutine(implementation.EndText());
+
+        	Debug.LogWarning("setting running to false");
+			running = false;
+
+			if (varLineIndex != "" && varLineIndex != null)
+				implementation.SetInteger(varLineIndex, -1);
+		}	
 	}
 
 	delegate string ProcessMethod(string chunk);
@@ -812,7 +1004,9 @@ CantFindNodeLoopPoint:
 	public string ParseVariableName(string bit)
 	{
 		if (bit.Length < 2)
+		{
 			Debug.LogError("Invalid variable name: " + bit);
+		}
 		else
 		{
 			if (bit[0] == '$')
@@ -825,6 +1019,6 @@ CantFindNodeLoopPoint:
 
 	public int GetVariable(string var)
 	{
-		return Continuity.instance.GetVar(var);
+		return implementation.GetInteger(var);
 	}
 }
