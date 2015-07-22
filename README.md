@@ -4,7 +4,23 @@ Unity parsing and execution code for Yarn dialogue files. Used in Night in the W
 
 # Yarn
 
+![Screenshot](http://infiniteammo.com/Yarn/Screenshot.jpg)
+
 Get the Yarn dialogue editor here: http://github.com/infiniteammoinc/yarn
+
+# Examples
+
+Games built with Unity and Yarn.
+
+Lost Constellation: http://finji.itch.io/lost-constellation
+
+![Screenshot](http://infiniteammo.com/Yarn/lost-constellation.jpg)
+
+Sunflower (Demo): http://infiniteammo.com/Sunflower
+
+![Screenshot](http://infiniteammo.com/Yarn/sunflower.jpg)
+
+YarnTest: http://infiniteammo.com/YarnTest/  
 
 # Dialogue.cs
 
@@ -24,9 +40,20 @@ Should also be able to parse Twine files? Maybe? It used to! Note: doesn't suppo
 
 # Help!
 
-Contact: hello@infiniteammo.com or @infinite_ammo on twitter for help. 
+Contact: hello@infiniteammo.com or @infinite_ammo on twitter for help.
+
+I'm also available for short contract work to help you fully integrate the system into your game.
 
 # Credits
 
 Dialogue parsing by Alec Holowka - http://infiniteammo.com
-SimpleJSON written by Bunny83
+
+SimpleJSON written by Bunny83 - http://wiki.unity3d.com/index.php/SimpleJSON
+
+If you end up using the system in your game, we'd appreciate it if you could add the Yarn logo somewhere in your start up and credits screen.
+
+# Yarn Icon
+
+Yarn logo/icon created by @Mr_Alistair.
+
+![Icon](http://infiniteammo.com/Yarn/YarnIcon.png)
