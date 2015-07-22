@@ -72,30 +72,7 @@ public class Dialogue : MonoBehaviour
 	{
 		if (textAsset != null)
 			ParseInto(textAsset.text, ref nodes);
-
-		//LoadProgress();
 	}
-
-	/*
-	void LoadProgress()
-	{
-		if (progressKey != "")
-		{
-			string progressData = PlayerPrefs.GetString(progressKey);
-			var tokens = progressData.Split(':');
-			string nodeName = tokens[0];
-			int lineNumber = System.Convert.ToInt32(tokens[1], System.Globalization.CultureInfo.InvariantCulture);
-		}
-	}
-
-	void SaveProgress()
-	{
-		if (progressKey != "")
-		{
-			PlayerPrefs.SetString(progressKey, currentNode.title + ":" + currentLineNumber);
-		}
-	}
-	*/
 
 	public void SetCurrentOption(int currentOption)
 	{
@@ -178,15 +155,13 @@ public class Dialogue : MonoBehaviour
 			if (IsString(node.title, title))
 				return node;
 		}
-		//Debug.LogWarning("Could not find node of title: [" + title + "]");
+
 		return null;
 	}
 
 	public bool HasNode(TextAsset textAsset, string nodeName)
 	{
 		string nodeNamePointOne = nodeName + ".1";
-		//List<Node> nodes = new List<Node>();
-
 
 		if (textAsset != lastTextAssetParsed)
 		{
@@ -240,7 +215,7 @@ public class Dialogue : MonoBehaviour
 		this.textAsset = null;
 		filename = "";
 		ParseInto(text, ref nodes);
-		
+
 		RunInternal(startNode, startLineIndex);
 	}
 
@@ -326,7 +301,6 @@ public class Dialogue : MonoBehaviour
 		if (start != -1 && end != -1)
 		{
 			line = line.Substring(start+2, end-(start+2)); 
-			//Debug.LogWarning("after SUBSTRING: " + line);
 		}
 
 		line = line.Trim();
