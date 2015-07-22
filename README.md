@@ -42,7 +42,7 @@ Should also be able to parse Twine files? Maybe? It used to! Note: doesn't suppo
 
 Contact: hello@infiniteammo.com or @infinite_ammo on twitter for help.
 
-I'm also available for short contract work to help you fully integrate the system into your game.
+I'm also available for short term contract work to help you fully integrate the system into your game.
 
 # Credits
 
