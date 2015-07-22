@@ -2,6 +2,10 @@
 
 Unity parsing and execution code for Yarn dialogue files. Used in Night in the Woods (http://nightinthewoods.com) and other games.
 
+# Yarn
+
+Get the Yarn dialogue editor here: http://github.com/infiniteammoinc/yarn
+
 # Dialogue.cs
 
 Contains the main code for parsing and running files. You should leave this alone for the most part.
@@ -13,6 +17,10 @@ Contains the game-specific code. This is the file you'll want to customize to in
 # Continuity.cs
 
 Used for storing variables in the dialogue system. Useful for saving/loading dialogue system state.
+
+# Twine
+
+Should also be able to parse Twine files? Maybe? It used to!
 
 # Help!
 
