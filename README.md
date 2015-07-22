@@ -20,7 +20,7 @@ Used for storing variables in the dialogue system. Useful for saving/loading dia
 
 # Twine
 
-Should also be able to parse Twine files? Maybe? It used to!
+Should also be able to parse Twine files? Maybe? It used to! Note: doesn't support all twine features/functions
 
 # Help!
 
