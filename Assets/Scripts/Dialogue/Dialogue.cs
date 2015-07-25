@@ -63,6 +63,8 @@ public class Dialogue : MonoBehaviour
 
 	public string varNodeTitle, varLineIndex;
 
+	const bool autoSequentialNodes = true;
+
 	void Awake()
 	{
 		implementation = GetComponent<DialogueImplementation>();
@@ -79,6 +81,8 @@ public class Dialogue : MonoBehaviour
 		this.currentOption = currentOption;
 	}
 
+	// currently only parses Yarn JSON and Twine TWS files
+	// TODO: add support for Yarn XML parsing (should be pretty easy)
 	void ParseInto(string text, ref List<Node> nodes)
 	{
 		Filetype filetype = Filetype.JSON;
@@ -102,6 +106,7 @@ public class Dialogue : MonoBehaviour
 				c++;
 			}
 			break;
+
 		case Filetype.Twine:
 			string[] lines = text.Split('\n');
 
@@ -194,7 +199,6 @@ public class Dialogue : MonoBehaviour
 		return "";
 	}
 
-
 	// parse the textAsset (if not already parsed) and run 
 	public void Run(TextAsset textAsset, string startNode = "Start", int startLineIndex = 0)
 	{
@@ -241,28 +245,32 @@ public class Dialogue : MonoBehaviour
 		if (currentNode == null)
 		{
 			Debug.LogWarning("Could not find node named: " + startNode);
-			currentNode = GetNode(startNode + ".1");
-			if (currentNode != null)
+
+			if (autoSequentialNodes)
 			{
-				// if we can't find a node with the regular name but we can find a node with the .1 after it, then 
-				// we're playing a repeated auto node thingy
-				// so check continuity
-				int nodeProgress = implementation.GetInteger(filename + "_" + startNode);
-				if (nodeProgress != -1)
+				currentNode = GetNode(startNode + ".1");
+				if (currentNode != null)
 				{
-					// try to get the next node in the sequence
-					currentNode = GetNode(startNode + "." + (nodeProgress+1));
-					if (currentNode == null)
+					// if we can't find a node with the regular name but we can find a node with the .1 after it, then 
+					// we're playing a repeated auto node thingy
+					// so check continuity
+					int nodeProgress = implementation.GetInteger(filename + "_" + startNode);
+					if (nodeProgress != -1)
 					{
-						// if we couldn't get the next node, repeat the last node
-						if (nodeProgress != 0)
-							currentNode = GetNode(startNode + "." + nodeProgress);
-					}
-					else
-					{
-						// commit to moving to the next node, since we found it
-						nodeProgress++;
-						implementation.SetInteger(filename + "_" + startNode, nodeProgress);
+						// try to get the next node in the sequence
+						currentNode = GetNode(startNode + "." + (nodeProgress+1));
+						if (currentNode == null)
+						{
+							// if we couldn't get the next node, repeat the last node
+							if (nodeProgress != 0)
+								currentNode = GetNode(startNode + "." + nodeProgress);
+						}
+						else
+						{
+							// commit to moving to the next node, since we found it
+							nodeProgress++;
+							implementation.SetInteger(filename + "_" + startNode, nodeProgress);
+						}
 					}
 				}
 			}
@@ -271,9 +279,7 @@ public class Dialogue : MonoBehaviour
 		{
 			int nodeProgress = implementation.GetInteger(filename + "_" + startNode);
 			if (nodeProgress == -1)
-			{
 				currentNode = null;
-			}
 		}
 
 		if (currentNode != null)
@@ -965,7 +971,7 @@ CantFindNodeLoopPoint:
 		string[] bits = macro.Split(' ');
 		if (IsString(bits[0], "print"))
 		{
-			// parse variables, return result
+			// TODO: parse variables, return result
 		}
 		return macro;
 	}
