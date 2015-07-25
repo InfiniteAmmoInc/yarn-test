@@ -57,3 +57,7 @@ If you end up using the system in your game, we'd appreciate it if you could add
 Yarn logo/icon created by @Mr_Alistair.
 
 ![Icon](http://infiniteammo.com/Yarn/YarnIcon.png)
+
+# TODO
+
+- add support for parsing Yarn XML files
