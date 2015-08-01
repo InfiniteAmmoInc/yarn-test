@@ -81,8 +81,6 @@ public class Dialogue : MonoBehaviour
 		this.currentOption = currentOption;
 	}
 
-	// currently only parses Yarn JSON and Twine TWS files
-	// TODO: add support for Yarn XML parsing (should be pretty easy)
 	void ParseInto(string text, ref List<Node> nodes)
 	{
 		Filetype filetype = Filetype.JSON;
@@ -428,7 +426,16 @@ public class Dialogue : MonoBehaviour
 			}
 			else
 			{
-				int val = int.Parse(bits[2], System.Globalization.CultureInfo.InvariantCulture);
+				Debug.LogWarning("chunk: " + chunk + " filename: " + filename);
+				int val = 0;
+				try
+				{
+					val = int.Parse(bits[2], System.Globalization.CultureInfo.InvariantCulture);
+				}
+				catch
+				{
+					Debug.LogError("Error parsing chunk: " + chunk + " in file: " + filename);
+				}
 
 				Debug.LogWarning("evaluate if chunk, variable = " + var);
 				
@@ -446,7 +453,7 @@ public class Dialogue : MonoBehaviour
 				else if (op == "!=" || op == "neq")
 					eval = (implementation.GetInteger(var) != val);
 				else
-					Debug.LogError("Comparison operator not defined: " + op);
+					Debug.LogError("Comparison operator not defined: " + op + " in file: " + filename);
 				result = eval;
 			}
 		}
