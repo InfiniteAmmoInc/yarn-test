@@ -9,12 +9,14 @@ public class Dialogue : MonoBehaviour
 {
 	public class Line
 	{
-		public Line(string text, int index)
+		public Line(string text, int index, int tabs)
 		{
 			this.index = index;
 			this.text = text;
+			this.tabs = tabs;
 		}
 		public int index;
+		public int tabs;
 		public string text;
 	}
 
@@ -44,7 +46,7 @@ public class Dialogue : MonoBehaviour
 	public bool running { get; private set; }
 	public int currentOption { get; private set; }
 
-	enum Filetype { Twine, JSON }
+	enum Filetype { Twine, JSON, XML }
 	enum ParseMode { None, Text, Title }
 
 	List<Node> nodes = new List<Node>();
@@ -63,7 +65,22 @@ public class Dialogue : MonoBehaviour
 
 	public string varNodeTitle, varLineIndex;
 
+	// =============================== CONFIG ===============================
+
+	// turn on auto sequential nodes
+	// NodeName.1
+	// NodeName.2
 	const bool autoSequentialNodes = true;
+
+	// turn on parsing of shortcut options
+	// e.g.
+	// -> option 1
+	// -> option 2
+	//    -> suboption 1
+	//    -> suboption 2 <<if $conditional is 1>>
+	//    -> suboption 3
+	// -> option 3
+	const bool parseShortcutOptions = true;
 
 	void Awake()
 	{
@@ -83,10 +100,12 @@ public class Dialogue : MonoBehaviour
 
 	void ParseInto(string text, ref List<Node> nodes)
 	{
-		Filetype filetype = Filetype.JSON;
+		Filetype filetype = Filetype.XML;
 
 		if (text.IndexOf("(dp0") == 0)
 			filetype = Filetype.Twine;
+		else if (text.IndexOf("[") == 0)
+			filetype = Filetype.JSON;
 
 		nodes.Clear();
 
@@ -103,6 +122,25 @@ public class Dialogue : MonoBehaviour
 				}
 				c++;
 			}
+			break;
+
+		case Filetype.XML:
+			//var xmlParser = new XMLParser(text);
+			//var xmlElement = xmlParser.Parse();
+			/*
+			XDocument xDoc = XDocument.Load("XMLFile1.xml");
+
+            var query = (from x in xDoc.Descendants("quiz").Elements("problem")
+                        select new Question
+                        {
+                            question = x.Element("question").Value,
+                            answerA = x.Element("answerA").Value,
+                            answerB = x.Element("answerB").Value,
+                            answerC = x.Element("answerC").Value,
+                            answerD = x.Element("answerD").Value,
+                            correct = x.Element("correct").Value
+                        }).ToList();
+			*/
 			break;
 
 		case Filetype.Twine:
@@ -200,15 +238,18 @@ public class Dialogue : MonoBehaviour
 	// parse the textAsset (if not already parsed) and run 
 	public void Run(TextAsset textAsset, string startNode = "Start", int startLineIndex = 0)
 	{
-		this.textAsset = textAsset;
-		filename = textAsset.name;
-		if (textAsset != lastTextAssetParsed)
+		if (textAsset != null)
 		{
-			Debug.LogWarning("Re-parsing...");
-			Parse(textAsset);
-		}
+			this.textAsset = textAsset;
+			filename = textAsset.name;
+			if (textAsset != lastTextAssetParsed)
+			{
+				Debug.LogWarning("Re-parsing...");
+				Parse(textAsset);
+			}
 
-		RunInternal(startNode, startLineIndex);
+			RunInternal(startNode, startLineIndex);
+		}
 	}
 
 	// parse the text passed in and run
@@ -536,11 +577,19 @@ public class Dialogue : MonoBehaviour
 		return returnLines;
 	}
 
-	IEnumerator ParseIf(List<Line> lines, int startLineIndex = 0)
+	public class LineBlock
 	{
-		//Debug.LogWarning("Entered ParseIf!");
+		public LineBlock()
+		{
+			lines = new List<Line>();
+		}
+		public List<Line> lines;
+	}
+
+	IEnumerator RunLines(List<Line> lines, int startLineIndex = 0)
+	{
 		ParseIfState parseIfState = ParseIfState.AddLines;
-		List<string> newLines = new List<string>();
+		//List<string> newLines = new List<string>();
 		int i = 0;
 		while (i < lines.Count)
 		{
@@ -556,7 +605,7 @@ public class Dialogue : MonoBehaviour
 					int skipAmount = block.Count+1;
 					i += skipAmount;
 					//Debug.Log("Passed if: ParseIfState.SkipToEndIf, skipped: " + skipAmount + " line now #" + i + ": " + lines[i]);
-					yield return StartCoroutine(ParseIf(block, startLineIndex));
+					yield return StartCoroutine(RunLines(block, startLineIndex));
 					if (i >= lines.Count)
 							break;
 					parseIfState = ParseIfState.SkipToEndIf;
@@ -590,7 +639,7 @@ public class Dialogue : MonoBehaviour
 						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						int skipAmount = block.Count+1;
 						i += skipAmount;
-						yield return StartCoroutine(ParseIf(block, startLineIndex));
+						yield return StartCoroutine(RunLines(block, startLineIndex));
 						parseIfState = ParseIfState.SkipToEndIf;
 						if (i >= lines.Count)
 							break;
@@ -626,7 +675,7 @@ public class Dialogue : MonoBehaviour
 					{
 						List<Line> block = GetIfBlock(lines.GetRange(i, lines.Count - i));
 						i += block.Count;
-						yield return StartCoroutine(ParseIf(block, startLineIndex));
+						yield return StartCoroutine(RunLines(block, startLineIndex));
 						parseIfState = ParseIfState.SkipToEndIf;
 					}
 					else
@@ -645,12 +694,94 @@ public class Dialogue : MonoBehaviour
 				parseIfState = ParseIfState.AddLines;
 				i++;
 			}
+			// parse shortcut options with -> 
+			else if (parseShortcutOptions && line.Trim().IndexOf("->") == 0)
+			{
+				List<LineBlock> optionLineBlocks = new List<LineBlock>();
+				int usingTabs = lines[i].tabs;
+				string optionText = "";
+				/*
+				var lineTrimmed = line.Trim();
+				var optionText = lineTrimmed.Substring(2, lineTrimmed.Length-2);
+				optionText = optionText.Trim();
+				*/
+
+				options.Clear();
+				// if null, skip lines
+				LineBlock lineBlock = null;
+				while (i < lines.Count)
+				{
+					var currentLine = lines[i];
+					Debug.Log("usingTabs: " + usingTabs + " currentLine.tabs: " + currentLine.tabs);
+					
+					// starting a new option and line block 
+					if (currentLine.tabs == usingTabs && currentLine.text.IndexOf("->") == usingTabs)
+					{
+						string lineText = currentLine.text;
+						bool conditional = true;
+						if (currentLine.text.IndexOf("<<") != -1)
+						{
+							conditional = EvaluateIf(currentLine.text.Substring(usingTabs, currentLine.text.Length - usingTabs));
+							int startIndex = lineText.IndexOf("<<");
+							int endIndex = lineText.IndexOf(">>");
+							lineText = lineText.Substring(0, startIndex) + lineText.Substring(endIndex+2, lineText.Length - (endIndex+2));
+							currentLine.text = lineText;
+						}
+
+						// end last one
+						if (lineBlock != null)
+							optionLineBlocks.Add(lineBlock);
+
+						if (conditional)
+						{
+							// start new one
+							optionText = lineText.Substring(usingTabs+2, lineText.Length-(usingTabs+2));
+							optionText = optionText.Trim();
+							options.Add(new Dialogue.Option(optionText, ""));
+							lineBlock = new LineBlock();
+						}
+						else
+						{
+							lineBlock = null;
+						}
+						// keep going
+					}
+					else if (currentLine.tabs <= usingTabs)
+					{
+						// end here
+						optionLineBlocks.Add(lineBlock);
+						break;
+					}
+					else
+					{
+						if (lineBlock != null)
+						{
+							Debug.Log("adding line to block: " + currentLine.text);
+							lineBlock.lines.Add(currentLine);
+						}
+						else
+						{
+							Debug.Log("skipping line: " + currentLine.text);
+						}
+					}
+					i++;
+				}
+
+
+				optionLineBlocks.Add(lineBlock);
+
+				yield return StartCoroutine(implementation.RunOptions(options));
+
+				options.Clear();
+
+				yield return StartCoroutine(RunLines(optionLineBlocks[currentOption].lines));
+
+			}
 			else
 			{
 				if (parseIfState == ParseIfState.AddLines)
 				{
 					yield return StartCoroutine(RunLine(lines[i], startLineIndex));
-					newLines.Add(line);
 				}
 				i++;
 			}
@@ -717,7 +848,7 @@ public class Dialogue : MonoBehaviour
 
 	public IEnumerator RunLine(Line lineObject, int startLineIndex)
 	{
-		//Debug.LogWarning("Running line: " + line);
+		Debug.LogWarning("Running line: " + lineObject.text);
 		while (implementation.IsPaused())
 		{
 			yield return null;
@@ -846,6 +977,7 @@ public class Dialogue : MonoBehaviour
 			if (c > 2560)
 				break;
 
+			/*
 			while (line.IndexOf("<<") != -1)
 			{
 				string front = "", center = "";
@@ -856,26 +988,27 @@ public class Dialogue : MonoBehaviour
 
 				int end = commandLineEnd + 2;
 
-				front = line.Substring(0, commandLineStart).Trim();
-				if (front != "")
+				front = line.Substring(0, commandLineStart);//.Trim();
+				if (front.Trim() != "")
 				{
-					sortedLines.Add(new Line(front, lineIndex));
+					sortedLines.Add(new Line(front, lineIndex, GetNumLeadingTabSpaces(front)));
 					lineIndex++;
 				}
 				
 				center = line.Substring(commandLineStart, end - commandLineStart).Trim();
 				if (center != "")
 				{
-					sortedLines.Add(new Line(center, lineIndex));
+					sortedLines.Add(new Line(center, lineIndex, 0));
 					lineIndex++;
 				}
 
 				line = line.Substring(end, line.Length - end).Trim();
 			}
+			*/
 			
 			if (line != "")
 			{
-				sortedLines.Add(new Line(line, lineIndex));
+				sortedLines.Add(new Line(line, lineIndex, GetNumLeadingTabSpaces(line)));
 				lineIndex++;
 			}
 		}
@@ -883,7 +1016,7 @@ public class Dialogue : MonoBehaviour
 		// MACROS
 
 		// parse ifs
-		yield return StartCoroutine(ParseIf(sortedLines, startLineIndex));
+		yield return StartCoroutine(RunLines(sortedLines, startLineIndex));
 
 		// skip options select if we only have one option and it has no text
 		if (options.Count == 1 && options[0].text == "")
@@ -935,6 +1068,19 @@ CantFindNodeLoopPoint:
 			if (varLineIndex != "" && varLineIndex != null)
 				implementation.SetInteger(varLineIndex, -1);
 		}	
+	}
+
+	int GetNumLeadingTabSpaces(string s)
+	{
+		int numTabs = 0;
+		for (int i = 0; i < s.Length; i++)
+		{
+			if (s[i] == ' ')
+				numTabs++;
+			else
+				break;
+		}
+		return numTabs;
 	}
 
 	delegate string ProcessMethod(string chunk);
