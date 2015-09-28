@@ -6,7 +6,7 @@ WARNING: There is a new Yarn parser coming soon. It will be way cooler than this
 
 # Yarn
 
-![Screenshot](http://infiniteammo.com/Yarn/Screenshot.jpg)
+![Screenshot](http://infiniteammo.com/Yarn/screenshot.jpg)
 
 Get the Yarn dialogue editor here: http://github.com/infiniteammoinc/yarn
 
@@ -62,7 +62,7 @@ If you end up using the system in your game, we'd appreciate it if you could add
 
 Yarn logo/icon created by @Mr_Alistair.
 
-![Icon](http://infiniteammo.com/Yarn/YarnIcon.png)
+![Icon](http://infiniteammo.com/Yarn/yarn-icon.png)
 
 # TODO
 
