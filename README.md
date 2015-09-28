@@ -2,6 +2,8 @@
 
 Unity parsing and execution code for Yarn dialogue files. Used in Night in the Woods (http://nightinthewoods.com) and other games.
 
+WARNING: There is a new Yarn parser coming soon. It will be way cooler than this one. \:D/
+
 # Yarn
 
 ![Screenshot](http://infiniteammo.com/Yarn/Screenshot.jpg)
